@@ -1,0 +1,27 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #ecf0f3;
+  --foreground: #171717;
+  --font-poppins: 'Poppins', sans-serif;
+}
+
+/* CUSTOM TOAST STYLES FOR SONNER */
+[data-sonner-toast] {
+  font-family: var(--font-poppins) !important;
+  background: #ecf0f3 !important;
+  border: none !important;
+  box-shadow: 5px 5px 10px #cbced1, -5px -5px 10px #ffffff !important;
+  color: #555 !important;
+  border-radius: 12px !important;
+}
+
+[data-sonner-toast][data-type="error"] {
+  color: #ef4444 !important;
+}
+
+[data-sonner-toast][data-type="success"] {
+  color: #10b981 !important;
+}
