@@ -1,0 +1,25 @@
+{
+    "name": "@repo/database",
+    "version": "1.0.0",
+    "prisma": {
+        "seed": "ts-node prisma/seed.ts"
+    },
+    "main": "dist/index.js",
+    "types": "dist/index.d.ts",
+    "scripts": {
+        "build": "tsc",
+        "db:push": "prisma db push",
+        "db:generate": "prisma generate",
+        "db:studio": "prisma studio"
+    },
+    "dependencies": {
+        "@prisma/client": "^5.10.2",
+        "socket.io-client": "^4.8.3"
+    },
+    "devDependencies": {
+        "@types/node": "^20.19.33",
+        "prisma": "^5.10.2",
+        "ts-node": "^10.9.2",
+        "typescript": "^5.9.3"
+    }
+}

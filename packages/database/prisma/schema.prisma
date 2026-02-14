@@ -1,0 +1,289 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// --- 1. CORE IDENTITY ---
+
+model User {
+  id           String    @id @default(uuid())
+  email        String    @unique
+  passwordHash String
+  fullName     String
+  phone        String?
+  isActive     Boolean   @default(true)
+  tenantId     String?
+  tenant       Tenant?   @relation(fields: [tenantId], references: [id])
+  roles        UserRole[]
+  notifications Notification[]
+  logs         AuditLog[]
+
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime?
+
+  @@index([email])
+  @@index([tenantId])
+}
+
+model Role {
+  id        String     @id @default(uuid())
+  name      String     @unique // SUPERADMIN, TENANT, etc.
+  level     Int        // 1=Customer, 10=Staff, 50=Tenant, 99=Superadmin
+  users     UserRole[]
+}
+
+model UserRole {
+  userId String
+  roleId String
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+}
+
+// --- 2. TENANT STRUCTURE ---
+
+model Tenant {
+  id             String         @id @default(uuid())
+  slug           String         @unique
+  name           String
+  logoUrl        String?
+  address        String?
+  phone          String?
+  isActive       Boolean        @default(true)
+  subscription   Subscription?
+  users          User[]
+  branches       Branch[]
+  kosts          Kost[]
+  customers      Customer[]
+  roomTypes      RoomType[]
+  rooms          Room[]
+  bookings       Booking[]
+  invoices       Invoice[]
+  payments       Payment[]
+  expenses       Expense[]
+  apiKeys        ApiKey[]
+  apiUsage       ApiUsageLog[]
+  notifications  Notification[]
+  auditLogs      AuditLog[]
+
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+
+  @@index([slug])
+}
+
+model Branch {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  name      String
+  address   String?
+  kosts     Kost[]
+  createdAt DateTime @default(now())
+}
+
+// --- 3. KOST & ROOM ---
+
+model Kost {
+  id          String   @id @default(uuid())
+  tenantId    String
+  branchId    String?
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  branch      Branch?  @relation(fields: [branchId], references: [id])
+  name        String
+  description String?
+  rooms       Room[]
+  createdAt   DateTime @default(now())
+}
+
+model RoomType {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  name        String
+  basePrice   Decimal
+  facilities  String
+  rooms       Room[]
+}
+
+model Room {
+  id              String      @id @default(uuid())
+  tenantId        String
+  kostId          String
+  roomTypeId      String
+  tenant          Tenant      @relation(fields: [tenantId], references: [id])
+  kost            Kost        @relation(fields: [kostId], references: [id])
+  roomType        RoomType    @relation(fields: [roomTypeId], references: [id])
+  roomNumber      String
+  price           Decimal
+  status          String      @default("AVAILABLE")
+  currentBookingId String? // Optimization for quick lookup
+  bookings        Booking[]
+
+  createdAt       DateTime    @default(now())
+  
+  @@index([tenantId, status])
+  @@index([kostId])
+}
+
+// --- 4. CUSTOMER & BOOKING ---
+
+model Customer {
+  id          String    @id @default(uuid())
+  tenantId    String
+  tenant      Tenant    @relation(fields: [tenantId], references: [id])
+  fullName    String
+  phone       String
+  email       String?
+  ktpNumber   String
+  ktpImageUrl String?
+  address     String?
+  bookings    Booking[]
+  createdAt   DateTime  @default(now())
+
+  @@index([tenantId])
+  @@index([ktpNumber])
+}
+
+// Enum removed for SQLite
+model Booking {
+  id            String        @id @default(uuid())
+  tenantId      String
+  roomId        String
+  customerId    String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  room          Room          @relation(fields: [roomId], references: [id])
+  customer      Customer      @relation(fields: [customerId], references: [id])
+  startDate     DateTime
+  endDate       DateTime
+  durationMonth Int
+  status        String
+  invoices      Invoice[]
+  
+  createdAt     DateTime      @default(now())
+
+  @@index([roomId])
+  @@index([customerId])
+  @@index([status])
+}
+
+// --- 5. BILLING ---
+
+model Invoice {
+  id            String        @id @default(uuid())
+  tenantId      String
+  bookingId     String
+  tenant        Tenant        @relation(fields: [tenantId], references: [id])
+  booking       Booking       @relation(fields: [bookingId], references: [id])
+  invoiceNumber String        @unique
+  amount        Decimal
+  dueDate       DateTime
+  status        String
+  pdfUrl        String?
+  payments      Payment[]
+
+  createdAt     DateTime      @default(now())
+}
+
+model Payment {
+  id            String   @id @default(uuid())
+  tenantId      String
+  invoiceId     String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id])
+  invoice       Invoice  @relation(fields: [invoiceId], references: [id])
+  amount        Decimal
+  paymentMethod String
+  paidAt        DateTime @default(now())
+}
+
+model Expense {
+  id          String   @id @default(uuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id])
+  title       String
+  amount      Decimal
+  category    String
+  expenseDate DateTime
+}
+
+// --- 6. SUBSCRIPTION ---
+
+model Plan {
+  id              String         @id @default(uuid())
+  name            String
+  price           Decimal
+  maxRooms        Int
+  maxStaff        Int
+  maxApiCalls     Int
+  allowFinance    Boolean
+  allowExport     Boolean
+  allowMultiBranch Boolean
+  subscriptions   Subscription[]
+  createdAt       DateTime       @default(now())
+}
+
+model Subscription {
+  id        String    @id @default(uuid())
+  tenantId  String    @unique
+  planId    String
+  tenant    Tenant    @relation(fields: [tenantId], references: [id])
+  plan      Plan      @relation(fields: [planId], references: [id])
+  status    String
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime  @default(now())
+}
+
+// --- 7. PUBLIC API & LOGS ---
+
+model ApiKey {
+  id        String   @id @default(uuid())
+  tenantId  String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  keyHash   String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+}
+
+model ApiUsageLog {
+  id           String   @id @default(uuid())
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id])
+  endpoint     String
+  requestCount Int
+  date         DateTime
+}
+
+model Notification {
+  id        String   @id @default(uuid())
+  tenantId  String
+  userId    String
+  tenant    Tenant   @relation(fields: [tenantId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])
+  type      String
+  message   String
+  isRead    Boolean  @default(false)
+  createdAt DateTime @default(now())
+}
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  tenantId   String?
+  userId     String?
+  tenant     Tenant?  @relation(fields: [tenantId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id])
+  action     String
+  entityType String
+  entityId   String
+  changes    String?
+  createdAt  DateTime @default(now())
+}
